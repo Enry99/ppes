@@ -349,7 +349,7 @@ def generate_sweep(upper, lower, settings_dict):
             launch_job(folder, settings_dict["program"], settings_dict["jobscript_file"], f"d_{dz}")
 
 
-    with open('z_values.txt', 'w') as f:
+    with open('distance.txt', 'w') as f:
         f.write('\n'.join(map(str, z_values)))
 
 
@@ -389,7 +389,7 @@ def get_results(settings_dict):
     step = settings_dict["step"]
 
     #read z values from file
-    with open('z_values.txt', 'r') as f:
+    with open('distance.txt', 'r') as f:
         z_values = list(map(float, f.readlines()))
 
     z_values_present = []
