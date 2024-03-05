@@ -10,6 +10,7 @@ import os, sys, shutil, json
 from ase.calculators.espresso import Espresso
 from ase.calculators.vasp import Vasp
 from ase.io.espresso import read_fortran_namelist
+from ase.io.vasp import write_vasp
 import ase_custom
 
 # Define the folder names for the isolated structures
@@ -49,7 +50,7 @@ def write_input(atoms, folder, settings_dict, filename_label=None):
     elif settings_dict["program"] == 'vasp':
         
         if settings_dict.get("poscar_only", False):
-            write(f'{folder}/POSCAR', atoms)
+            write_vasp(f'{folder}/POSCAR', atoms, sort=False)
             os.shutil.copyfile('INCAR', f'{folder}/INCAR')
             os.shutil.copyfile('KPOINTS', f'{folder}/KPOINTS')
             os.shutil.copyfile('POTCAR', f'{folder}/POTCAR')
@@ -447,3 +448,6 @@ def main():
     else:
         print("Command not recognized.")
 
+
+if __name__ == "__main__":
+    main()
