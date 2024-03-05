@@ -1,3 +1,6 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 '''
 @ Program: ppes
 @ Author: Enrico Pedretti
@@ -12,6 +15,8 @@ from ase.calculators.vasp import Vasp
 from ase.io.espresso import read_fortran_namelist
 from ase.io.vasp import write_vasp
 import ase_custom
+
+TEST = False
 
 # Define the folder names for the isolated structures
 upper_folder = 'isolated/upper'
@@ -40,6 +45,7 @@ def write_input(atoms, folder, settings_dict, filename_label=None):
         dft_settings_dict = parse_espresso_settings(settings_dict["pwi_head"])
 
         calculator = Espresso(label = filename_label if filename_label else 'input',
+                            directory=folder,
                             pseudopotentials=dft_settings_dict['pseudopotentials'],
                             kpts=dft_settings_dict["kpts"],
                             koffset=dft_settings_dict["koffset"],
@@ -51,9 +57,9 @@ def write_input(atoms, folder, settings_dict, filename_label=None):
         
         if settings_dict.get("poscar_only", False):
             write_vasp(f'{folder}/POSCAR', atoms, sort=False)
-            os.shutil.copyfile('INCAR', f'{folder}/INCAR')
-            os.shutil.copyfile('KPOINTS', f'{folder}/KPOINTS')
-            os.shutil.copyfile('POTCAR', f'{folder}/POTCAR')
+            shutil.copyfile('INCAR', f'{folder}/INCAR')
+            shutil.copyfile('KPOINTS', f'{folder}/KPOINTS')
+            shutil.copyfile('POTCAR', f'{folder}/POTCAR')
 
         else:
             os.environ["VASP_PP_PATH"] = settings_dict["vasp_pp_path"] #set the path to the VASP pseudopotentials
@@ -63,6 +69,7 @@ def write_input(atoms, folder, settings_dict, filename_label=None):
                             xc='PBE', 
                             setups=settings_dict["vasp_pseudo_setups"])
             calculator.read_incar('INCAR')
+            calculator.list_float_params['magmom'] = [0.5]*len(atoms) #TODO: make this a setting
             calculator.read_kpoints('KPOINTS')
 
             calculator.write_input(atoms)
@@ -150,9 +157,15 @@ def launch_job(folder, program, jobscript_file, input_label=None):
 
     os.chdir(folder)
     if program == 'qe':
-        os.system(f'sbatch jobscript {input_label}.pwi >> {input_label}.pwo')
+        if TEST:
+            print(f'sbatch jobscript {input_label}.pwi {input_label}.pwo from {folder}')
+        else:
+            os.system(f'sbatch jobscript {input_label}.pwi {input_label}.pwo')
     elif program == 'vasp':
-        os.system(f'sbatch jobscript')
+        if TEST:
+            print(f'sbatch jobscript from {folder}')
+        else:
+            os.system(f'sbatch jobscript')
     os.chdir(main_folder)
 
 
@@ -254,7 +267,7 @@ def generate_isolated(settings_dict):
         lower = read(settings_dict["filename_lower"])
 
         # If both upper and lower already calculated, just return
-        if hasattr(upper, "calc") and hasattr(lower, "calc"):
+        if hasattr(upper, "calc") and hasattr(lower, "calc") and upper.calc is not None and lower.calc is not None:
             if upper.calc.results.get("energy", None) is not None and lower.calc.results.get("energy", None) is not None:
                 return upper, lower
             
@@ -315,7 +328,7 @@ def generate_sweep(upper, lower, settings_dict):
     if settings_dict.get("reference_distance", None) is not None:
         # If the initial distance is set, we need to move the upper atoms to the correct position
         transl = settings_dict["reference_distance"] - initial_distance
-        upper.positions[:,which_coord] = lower.positions[:,which_coord] + transl
+        upper.positions[:,which_coord] += transl
         
         initial_distance = settings_dict["reference_distance"]
 

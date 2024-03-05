@@ -90,10 +90,12 @@ For VASP:
 - `vasp_pseudo_setups`
 - `poscar_only`
 
+Note that 'vasp_pp_path' must contain folders with ASE nomenclature, e.g. 'potpaw_PBE' (containing all the folders with the POTCARs)
+
 
 **Job submission settings:**
 - `launch_sweep`: if false, generate only the input file without submitting the sweep (PPES) calculations.
 - `launch_isolated`: if false, generate only the files without submitting the calculations for the two isolated structures (upper and lower). Note that if the two structures are provided as a file that contains the energy, e.g. OUTCAR. The calculation is not re-done and that value is used.
-- `jobscript`. Path of a working jobscript file. For QE you need to include `-input $1 >> $2` in the line where pw.x is run.
+- `jobscript_file`. Path of a working jobscript file. For QE you need to include `-input $1 >> $2` in the line where pw.x is run.
 
 

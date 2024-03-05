@@ -1,25 +1,25 @@
 {
 
-    "range_sweep" : [0, 2.5],               // range of the sweep starting from the initial distance
-    "step": 0.25,                           // step of the sweep
-    "which_coord" : "z",                    // which coordinate to move
-    "reference_distance" : 1.0,             // initial distance between upper and lower. If not set, the initial distance comes from the input structures
+    "range_sweep" : [0, 2.5],              
+    "step": 0.25,                          
+    "which_coord" : "z",                    
+    "reference_distance" : 1.0,         
 
     "filename_full" : "POSCAR",
     "filename_upper" : "upper/POSCAR",
     "filename_lower" : "lower/POSCAR",
 
-    "upper_atoms" : [0, 1],                 // atoms that are moved. Only one between upper_atoms, upper_species and upper_min should be set (otherwise they are used in the order of priority)
-    "upper_species" : ["C", "H"],           // species of the atoms that are moved.
-    "upper_min"     : 10,                   // minimum coordinate for the selection of the atoms that are moved.
+    "upper_atoms" : [0, 1],             
+    "upper_species" : ["C", "H"],       
+    "upper_min"     : 10,               
 
-    "upper_range_fordistance" : [10,11],    // range of the subset of upper atoms to calculate the distance. If not set, the distance is calculated from the min of upper atoms
-    "upper_species_fordistance" : ["C"],    // species of the subset of upper atoms to calculate the distance. If not set, the distance is calculated from the min of upper atoms. Can be used in conjunction with upper_range_fordistance
-    "upper_thickness_fordistance" : 0.5,    // thickness to select the atoms in [z_upper_min, z_upper_min + upper_species_thickness] to calculate the distance 
+    "upper_range_fordistance" : [10,11],
+    "upper_species_fordistance" : ["C"], 
+    "upper_thickness_fordistance" : 0.5,
 
-    "lower_range_fordistance" : [8,9],      // range of the subset of lower atoms to calculate the distance. If not set, the distance is calculated from the min of lower atoms
-    "lower_species_fordistance" : ["Au"],   // species of the subset of lower atoms to calculate the distance. If not set, the distance is calculated from the min of lower atoms. Can be used in conjunction with lower_range_fordistance
-    "lower_thickness_fordistance" : 0.5,    // thickness to select the atoms in [z_lower_max, z_lower_max - lower_species_thickness] to calculate the distance
+    "lower_range_fordistance" : [8,9],  
+    "lower_species_fordistance" : ["Au"],
+    "lower_thickness_fordistance" : 0.5,
 
     
     "program" : "vasp",
@@ -28,12 +28,11 @@
     "poscar_only" : false,   
 
 
-    //"program" : "qe",
     "pwi_head" : "input.pwi",
 
 
     "launch_sweep" : true,
     "launch_isolated" : true,
-    "jobscript" : "jobscript"
+    "jobscript_file" : "jobscript"
 
 }
