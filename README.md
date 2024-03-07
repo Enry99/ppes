@@ -89,6 +89,7 @@ For VASP:
 - `vasp_pp_path`: the directory must contain a folder named 'potpaw_PBE' with all the folders with the name of the elements, each containing its POTCAR
 - `vasp_pseudo_setups`: version of the potentials, as a dictionary, e.g. {"base": "recommended", "Li": "_sv"}
 - `poscar_only`: write only the POSCAR. The INCAR, POTCAR AND KPOINTS must be present in the current folder
+- `keep_order`: keep the order of atoms when writing the output file (this is valid also for QE). Defaults to true when `poscar_only` is true, otherwise to false
 
 
 

@@ -25,7 +25,8 @@
     "program" : "vasp",
     "vasp_pp_path" : "ase_resources",
     "vasp_pseudo_setups" : {"base" : "recommended"},
-    "poscar_only" : false,   
+    "poscar_only" : false,
+    "keep_order": false,
 
 
     "pwi_head" : "input.pwi",

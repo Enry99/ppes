@@ -7,12 +7,13 @@
 @ Created: 2024-04-03
 '''
 
-from ase.io import read, write
+from ase.io import read
 import numpy as np
 import os, sys, shutil, json
 from ase.calculators.espresso import Espresso
 from ase.calculators.vasp import Vasp
 from ase.io.espresso import read_fortran_namelist
+from ase.io.vasp import write_vasp
 import ase_custom
 
 TEST = False
@@ -57,7 +58,7 @@ def write_input(atoms, folder, settings_dict, filename_label=None):
         if settings_dict.get("poscar_only", False):
             if not os.path.exists(folder):
                 os.makedirs(folder, exist_ok=True)
-            write(f'{folder}/POSCAR', atoms)
+            write_vasp(f'{folder}/POSCAR', atoms, sort=False)
             shutil.copyfile('INCAR', f'{folder}/INCAR')
             shutil.copyfile('KPOINTS', f'{folder}/KPOINTS')
             shutil.copyfile('POTCAR', f'{folder}/POTCAR')
@@ -303,8 +304,8 @@ def generate_isolated(settings_dict):
     else:
         print("Upper and lower were written to isolated/upper and isolated/lower, but NOT calculated, as requested.")
 
-    if settings_dict.get("keep_order", False):
-        return upper, lower, upper_indices, lower_indices, atoms
+    if settings_dict.get("keep_order", settings_dict.get("poscar_only", False)):
+        return upper, lower, upper_indices, atoms
     else:
         return upper, lower, None, None
             
