@@ -413,7 +413,6 @@ def get_results(settings_dict):
     z_values_present = []
     energies = []
     for dz, z in zip(np.arange(range_sweep[0], range_sweep[1], step), z_values):
-        print(dz, z)
         folder = "{0}/d_{1:4.2f}".format(sweep_folder, dz)
         if settings_dict["program"] == 'qe':
             file = "{0}/d_{1:4.2f}.pwo".format(folder, dz)
@@ -426,8 +425,6 @@ def get_results(settings_dict):
                 energy = atoms.get_potential_energy()
             except:
                 continue
-
-            print(energy, z)
 
             z_values_present.append(z)
             energies.append(energy - results["upper_energy"] - results["lower_energy"])
