@@ -86,9 +86,9 @@ For QE:
 
 
 For VASP:
-- `vasp_pp_path`
-- `vasp_pseudo_setups`
-- `poscar_only`
+- `vasp_pp_path`: the directory must contain a folder named 'potpaw_PBE' with all the folders with the name of the elements, each containing its POTCAR
+- `vasp_pseudo_setups`: version of the potentials, as a dictionary, e.g. {"base": "recommended", "Li": "_sv"}
+- `poscar_only`: "write only the POSCAR
 
 Note that 'vasp_pp_path' must contain folders with ASE nomenclature, e.g. 'potpaw_PBE' (containing all the folders with the POTCARs)
 
