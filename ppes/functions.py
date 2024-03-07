@@ -16,7 +16,7 @@ from ase.io.espresso import read_fortran_namelist
 from ase.io.vasp import write_vasp
 import ase_custom
 
-TEST = True
+TEST = False
 
 # Define the folder names for the isolated structures
 upper_folder = 'isolated/upper'
