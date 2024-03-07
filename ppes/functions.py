@@ -7,13 +7,12 @@
 @ Created: 2024-04-03
 '''
 
-from ase.io import read
+from ase.io import read, write
 import numpy as np
 import os, sys, shutil, json
 from ase.calculators.espresso import Espresso
 from ase.calculators.vasp import Vasp
 from ase.io.espresso import read_fortran_namelist
-from ase.io.vasp import write_vasp
 import ase_custom
 
 TEST = False
@@ -58,7 +57,7 @@ def write_input(atoms, folder, settings_dict, filename_label=None):
         if settings_dict.get("poscar_only", False):
             if not os.path.exists(folder):
                 os.makedirs(folder, exist_ok=True)
-            write_vasp(f'{folder}/POSCAR', atoms, sort=False)
+            write(f'{folder}/POSCAR', atoms)
             shutil.copyfile('INCAR', f'{folder}/INCAR')
             shutil.copyfile('KPOINTS', f'{folder}/KPOINTS')
             shutil.copyfile('POTCAR', f'{folder}/POTCAR')
