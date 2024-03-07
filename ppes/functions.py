@@ -7,7 +7,7 @@
 @ Created: 2024-04-03
 '''
 
-from ase.io import read, write
+from ase.io import read
 import numpy as np
 import os, sys, shutil, json
 from ase.calculators.espresso import Espresso
@@ -16,7 +16,7 @@ from ase.io.espresso import read_fortran_namelist
 from ase.io.vasp import write_vasp
 import ase_custom
 
-TEST = False
+TEST = True
 
 # Define the folder names for the isolated structures
 upper_folder = 'isolated/upper'
@@ -56,6 +56,8 @@ def write_input(atoms, folder, settings_dict, filename_label=None):
     elif settings_dict["program"] == 'vasp':
         
         if settings_dict.get("poscar_only", False):
+            if not os.path.exists(folder):
+                os.makedirs(folder, exist_ok=True)
             write_vasp(f'{folder}/POSCAR', atoms, sort=False)
             shutil.copyfile('INCAR', f'{folder}/INCAR')
             shutil.copyfile('KPOINTS', f'{folder}/KPOINTS')
@@ -269,7 +271,7 @@ def generate_isolated(settings_dict):
         # If both upper and lower already calculated, just return
         if hasattr(upper, "calc") and hasattr(lower, "calc") and upper.calc is not None and lower.calc is not None:
             if upper.calc.results.get("energy", None) is not None and lower.calc.results.get("energy", None) is not None:
-                return upper, lower
+                return upper, lower, None, None
             
     else:
         # Upper and lower not present, need to select from full structure
@@ -302,10 +304,13 @@ def generate_isolated(settings_dict):
     else:
         print("Upper and lower were written to isolated/upper and isolated/lower, but NOT calculated, as requested.")
 
-    return upper, lower
+    if settings_dict.get("keep_order", False):
+        return upper, lower, upper_indices, lower_indices, atoms
+    else:
+        return upper, lower, None, None
             
 
-def generate_sweep(upper, lower, settings_dict):
+def generate_sweep(upper, lower, upper_indices, atoms, settings_dict):
     """
     Generate a sweep of atomic positions by moving the upper atoms along a specified coordinate.
 
@@ -328,7 +333,10 @@ def generate_sweep(upper, lower, settings_dict):
     if settings_dict.get("reference_distance", None) is not None:
         # If the initial distance is set, we need to move the upper atoms to the correct position
         transl = settings_dict["reference_distance"] - initial_distance
-        upper.positions[:,which_coord] += transl
+        if atoms is None:  
+            upper.positions[:,which_coord] += transl
+        else:
+            atoms.positions[upper_indices,which_coord] += transl
         
         initial_distance = settings_dict["reference_distance"]
 
@@ -337,16 +345,21 @@ def generate_sweep(upper, lower, settings_dict):
         
     z_values = []
     for dz in np.arange(range_sweep[0], range_sweep[1], step):
-        new_upper = upper.copy()
-        new_upper.positions[:,which_coord] += dz
-        new_atoms = new_upper + lower
-        folder = f'{sweep_folder}/d_{dz}'
+        if atoms is None:
+            new_upper = upper.copy()
+            new_upper.positions[:,which_coord] += dz
+            new_atoms = new_upper + lower
+        else:
+            new_atoms = atoms.copy()
+            new_atoms.positions[upper_indices,which_coord] += dz
+        
+        folder = "{0}/d_{1:4.2f}".format(sweep_folder, dz)
         os.makedirs(folder, exist_ok=True)
-        write_input(new_atoms, folder, settings_dict, f"d_{dz}")
+        write_input(new_atoms, folder, settings_dict, "d_{:4.2f}".format(dz))
         z_values.append(dz+initial_distance)
         
         if settings_dict.get("launch_sweep", False):
-            launch_job(folder, settings_dict["program"], settings_dict["jobscript_file"], f"d_{dz}")
+            launch_job(folder, settings_dict["program"], settings_dict["jobscript_file"], "d_{:4.2f}".format(dz))
 
 
     with open('distance.txt', 'w') as f:
@@ -367,22 +380,27 @@ def get_results(settings_dict):
     results = {}
 
 
-    if "filename_upper" in settings_dict and "filename_lower" in settings_dict:  
-        upper = read(settings_dict["filename_upper"])
-        lower = read(settings_dict["filename_lower"])
+    try:
+        if "filename_upper" in settings_dict and "filename_lower" in settings_dict:  
+            upper = read(settings_dict["filename_upper"])
+            lower = read(settings_dict["filename_lower"])
 
-        if hasattr(upper, "calc") and hasattr(lower, "calc"):
-            if upper.calc.results.get("energy", None) is not None and lower.calc.results.get("energy", None) is not None:
-                results["upper_energy"] = upper.get_potential_energy()
-                results["lower_energy"] = lower.get_potential_energy()
+            if hasattr(upper, "calc") and hasattr(lower, "calc"):
+                if upper.calc.results.get("energy", None) is not None and lower.calc.results.get("energy", None) is not None:
+                    results["upper_energy"] = upper.get_potential_energy()
+                    results["lower_energy"] = lower.get_potential_energy()
 
-    if "upper_energy" not in results or "lower_energy" not in results:
-        up_fn = 'OUTCAR' if settings_dict["program"] == 'vasp' else 'upper.pwo'
-        dw_fn = 'OUTCAR' if settings_dict["program"] == 'vasp' else 'lower.pwo'
-        upper = read(f'{upper_folder}/{up_fn}')
-        lower = read(f'{lower_folder}/{dw_fn}')
-        results["upper_energy"] = upper.get_potential_energy()
-        results["lower_energy"] = lower.get_potential_energy()
+        if "upper_energy" not in results or "lower_energy" not in results:
+            up_fn = 'OUTCAR' if settings_dict["program"] == 'vasp' else 'upper.pwo'
+            dw_fn = 'OUTCAR' if settings_dict["program"] == 'vasp' else 'lower.pwo'
+            upper = read(f'{upper_folder}/{up_fn}')
+            lower = read(f'{lower_folder}/{dw_fn}')
+            results["upper_energy"] = upper.get_potential_energy()
+            results["lower_energy"] = lower.get_potential_energy()
+    except:
+        print("Could not read isolated energies. Total energies will be displayed.")
+        results["upper_energy"] = 0
+        results["lower_energy"] = 0
 
 
     range_sweep = settings_dict["range_sweep"]
@@ -395,9 +413,9 @@ def get_results(settings_dict):
     z_values_present = []
     energies = []
     for dz, z in zip(np.arange(range_sweep[0], range_sweep[1], step), z_values):
-        folder = f'{sweep_folder}/d_{dz}'
+        folder = "{0}/d_{1:4.2f}".format(sweep_folder, dz)
         if settings_dict["program"] == 'qe':
-            file = f'{folder}/d_{dz}.pwo'
+            file = "{0}/d_{1:4.2f}".format(folder, dz)
         elif settings_dict["program"] == 'vasp':
             file = f'{folder}/OUTCAR'
     
@@ -446,11 +464,11 @@ def main():
 
     if command == 'gen':
         print("Generating isolated structures...")
-        upper, lower = generate_isolated(settings_dict)
+        upper, lower, upper_indices, atoms = generate_isolated(settings_dict)
         print("Isolated structures generated.")
 
         print("Generating PPES files...")
-        generate_sweep(upper, lower, settings_dict)
+        generate_sweep(upper, lower, upper_indices, atoms, settings_dict)
         print("PPES files generated.")
 
     elif command == 'plot':
