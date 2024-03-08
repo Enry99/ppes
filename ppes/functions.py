@@ -417,7 +417,7 @@ def get_results(settings_dict):
     for dz, z in zip(np.arange(range_sweep[0], range_sweep[1], step), z_values):
         folder = "{0}/d_{1:4.2f}".format(sweep_folder, dz)
         if settings_dict["program"] == 'qe':
-            file = "{0}/d_{1:4.2f}".format(folder, dz)
+            file = "{0}/d_{1:4.2f}.pwo".format(folder, dz)
         elif settings_dict["program"] == 'vasp':
             file = f'{folder}/OUTCAR'
     
