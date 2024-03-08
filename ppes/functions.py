@@ -71,7 +71,9 @@ def write_input(atoms, folder, settings_dict, filename_label=None):
                             xc='PBE', 
                             setups=settings_dict["vasp_pseudo_setups"])
             calculator.read_incar('INCAR')
-            calculator.list_float_params['magmom'] = [0.5]*len(atoms) #TODO: make this a setting
+            if 'magmom' in calculator.list_float_params:
+                if len(calculator.list_float_params['magmom']) != len(atoms):
+                    calculator.list_float_params['magmom'] = [0.5]*len(atoms) #TODO: make this a setting
             calculator.read_kpoints('KPOINTS')
 
             calculator.write_input(atoms)
