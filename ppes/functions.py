@@ -272,7 +272,7 @@ def generate_isolated(settings_dict):
 
         # If both upper and lower already calculated, just return
         if hasattr(upper, "calc") and hasattr(lower, "calc") and upper.calc is not None and lower.calc is not None:
-            if upper.calc.results.get("energy", None) is not None and lower.calc.results.get("energy", None) is not None:
+            if upper.calc and lower.calc and upper.calc.results.get("energy", None) is not None and lower.calc.results.get("energy", None) is not None:
                 return upper, lower, None, None
             
     else:
@@ -388,7 +388,7 @@ def get_results(settings_dict):
             lower = read(settings_dict["filename_lower"])
 
             if hasattr(upper, "calc") and hasattr(lower, "calc"):
-                if upper.calc.results.get("energy", None) is not None and lower.calc.results.get("energy", None) is not None:
+                if upper.calc and lower.calc and upper.calc.results.get("energy", None) is not None and lower.calc.results.get("energy", None) is not None:
                     results["upper_energy"] = upper.get_potential_energy()
                     results["lower_energy"] = lower.get_potential_energy()
 
@@ -451,6 +451,7 @@ def plot_results(results):
     plt.plot(results["z_values"], results["energies"], '-o')
     plt.xlabel('Distance (Å)')
     plt.ylabel('Energy (eV)')
+    plt.grid(linestyle='dotted')
     plt.savefig('ppes.png', dpi=300, bbox_inches='tight')
 
 
