@@ -235,6 +235,11 @@ def distance(settings_dict, upper, lower):
     if "lower_range_fordistance" in settings_dict or "lower_species_fordistance" in settings_dict:
         #These options are combined (cascade) in this order
 
+        # Avoid problem when atoms are wrapped and leak from below the bottom slab
+        com = upper.get_center_of_mass()
+        lower_indices = [atom.index for atom in lower if atom.position[which_coord] < com[which_coord] ]
+        lower = lower[lower_indices]
+
         if "lower_range_fordistance" in settings_dict:
             lower_indices = [i for i in range(len(lower)) if lower.positions[i,which_coord] > settings_dict["lower_range_fordistance"][0]  \
                             and lower.positions[i,which_coord] < settings_dict["lower_range_fordistance"][1]]
