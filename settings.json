@@ -8,6 +8,7 @@
     "filename_full" : "POSCAR",
     "filename_upper" : "upper/POSCAR",
     "filename_lower" : "lower/POSCAR",
+    "ppes_from_relaxed" : false,
 
     "upper_atoms" : [0, 1],             
     "upper_species" : ["C", "H"],       
@@ -34,6 +35,7 @@
 
     "launch_sweep" : true,
     "launch_isolated" : true,
+    "launch_interface" : true,
     "jobscript_file" : "jobscript"
 
 }

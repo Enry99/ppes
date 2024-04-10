@@ -22,6 +22,7 @@ TEST = False
 upper_folder = 'isolated/upper'
 lower_folder = 'isolated/lower'
 sweep_folder = 'distance_sweep'
+relax_folder = 'interface_relax'
 
 
 def write_input(atoms, folder, settings_dict, filename_label=None):
@@ -261,7 +262,7 @@ def distance(settings_dict, upper, lower):
     return z_upper - z_lower
 
 
-def generate_isolated(settings_dict):
+def generate_isolated(settings_dict, WRITE=True):
     """
     Generate isolated upper and lower structures based on the provided settings.
 
@@ -278,7 +279,7 @@ def generate_isolated(settings_dict):
         # If both upper and lower already calculated, just return
         if hasattr(upper, "calc") and hasattr(lower, "calc") and upper.calc is not None and lower.calc is not None:
             if upper.calc and lower.calc and upper.calc.results.get("energy", None) is not None and lower.calc.results.get("energy", None) is not None:
-                return upper, lower, None, None
+                return upper, lower, np.arange(len(upper)), None
             
     else:
         # Upper and lower not present, need to select from full structure
@@ -300,22 +301,55 @@ def generate_isolated(settings_dict):
         lower = atoms[lower_indices]
     
 
-    write_input(upper, upper_folder, settings_dict, "upper")
-    write_input(lower, lower_folder, settings_dict, "lower")
+    if WRITE:
+        write_input(upper, upper_folder, settings_dict, "upper")
+        write_input(lower, lower_folder, settings_dict, "lower")
 
-    if settings_dict.get("launch_isolated", False):
-        if settings_dict.get("poscar_only", False):
-            raise ValueError("Cannot launch isolated structures with poscar_only set to True.")
-        launch_job(upper_folder, settings_dict["program"], settings_dict["jobscript_file"], "upper")
-        launch_job(lower_folder, settings_dict["program"], settings_dict["jobscript_file"], "lower")
-    else:
-        print("Upper and lower were written to isolated/upper and isolated/lower, but NOT calculated, as requested.")
+        if settings_dict.get("launch_isolated", False):
+            if settings_dict.get("poscar_only", False):
+                raise ValueError("Cannot launch isolated structures with poscar_only set to True.")
+            launch_job(upper_folder, settings_dict["program"], settings_dict["jobscript_file"], "upper")
+            launch_job(lower_folder, settings_dict["program"], settings_dict["jobscript_file"], "lower")
+        else:
+            print("Upper and lower were written to isolated/upper and isolated/lower, but NOT calculated, as requested.")
 
     if settings_dict.get("keep_order", settings_dict.get("poscar_only", False)):
         return upper, lower, upper_indices, atoms
     else:
-        return upper, lower, None, None
+        return upper, lower, np.arange(len(upper)), None
             
+
+def generate_interface(upper, lower, settings_dict):
+    """
+    Generate the interface between the upper and lower structures.
+
+    Args:
+        upper (Atoms): The upper atoms object.
+        lower (Atoms): The lower atoms object.
+        settings_dict (dict): A dictionary containing the settings for the interface generation.
+
+    Returns:
+        None
+    """
+
+    # Get the distance between the upper and lower atoms
+    initial_distance = distance(settings_dict, upper, lower)
+
+    # Move the upper atoms to the correct position
+    transl = settings_dict["reference_distance"] - initial_distance
+    upper.positions[:,sweep_coordinate(settings_dict)] += transl
+
+    # Combine the upper and lower atoms
+    atoms = upper + lower
+
+    # Write the input files
+    write_input(atoms, sweep_folder, settings_dict)
+
+    # Launch the job if requested
+    if settings_dict.get("launch_interface", False):
+        launch_job(relax_folder, settings_dict["program"], settings_dict["jobscript_file"], "interface_relax")
+
+
 
 def generate_sweep(upper, lower, upper_indices, atoms, settings_dict):
     """
@@ -471,13 +505,30 @@ def main():
     command = sys.argv[1]
 
     if command == 'gen':
-        print("Generating isolated structures...")
-        upper, lower, upper_indices, atoms = generate_isolated(settings_dict)
-        print("Isolated structures generated.")
+
+        if settings_dict.get("ppes_from_relaxed", False):
+            settings_dict["launch_isolated"] = False
+            settings_dict.pop("filename_upper", None)
+            settings_dict.pop("filename_lower", None)
+            settings_dict["filename_full"] = f'{relax_folder}/{'OUTCAR' if settings_dict["program"] == 'vasp' else 'interface_relax.pwo'}'
+            settings_dict["upper_atoms"] = np.loadtxt(f'{relax_folder}/upper_indices.txt', dtype=int)
+            upper, lower, upper_indices, atoms = generate_isolated(settings_dict, WRITE=False)
+
+        else:
+            print("Generating isolated structures...")
+            upper, lower, upper_indices, atoms = generate_isolated(settings_dict)
+            print("Isolated structures generated.")
 
         print("Generating PPES files...")
         generate_sweep(upper, lower, upper_indices, atoms, settings_dict)
         print("PPES files generated.")
+
+    elif command == 'rel':
+        print("Generating interface file...")
+        upper, lower, upper_indices, atoms = generate_isolated(settings_dict)
+        generate_interface(upper, lower, upper_indices, settings_dict)
+        np.savetxt(f'{relax_folder}/upper_indices.txt', upper_indices)
+        print("Interface file generated.")
 
     elif command == 'plot':
         results = get_results(settings_dict)
