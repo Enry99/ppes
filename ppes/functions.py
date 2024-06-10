@@ -510,7 +510,7 @@ def main():
             settings_dict["launch_isolated"] = False
             settings_dict.pop("filename_upper", None)
             settings_dict.pop("filename_lower", None)
-            settings_dict["filename_full"] = f'{relax_folder}/{'OUTCAR' if settings_dict["program"] == 'vasp' else 'interface_relax.pwo'}'
+            settings_dict["filename_full"] = f"{relax_folder}/{'OUTCAR' if settings_dict['program'] == 'vasp' else 'interface_relax.pwo'}"
             settings_dict["upper_atoms"] = np.loadtxt(f'{relax_folder}/upper_indices.txt', dtype=int)
             upper, lower, upper_indices, atoms = generate_isolated(settings_dict, WRITE=False)
 
