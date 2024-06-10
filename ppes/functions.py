@@ -476,6 +476,10 @@ def get_results(settings_dict):
 
     return results
 
+def save_to_txt(results):
+    data = np.column_stack((results["z_values"], results["energies"]))
+    np.savetxt("results.txt", data, fmt='%f', header='distance(A) Energies (eV)')
+
 
 def plot_results(results):
     """
@@ -533,6 +537,7 @@ def main():
     elif command == 'plot':
         results = get_results(settings_dict)
         plot_results(results)
+        save_to_txt(results)
         print("PPES plot generated.")
 
     else:
