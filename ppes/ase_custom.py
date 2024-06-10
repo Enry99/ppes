@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 from ase.atoms import Atoms, default
-from ase.io.espresso import create_units,_PW_START,_PW_END,_PW_CELL,_PW_POS,_PW_MAGMOM,_PW_FORCE,\
-    _PW_TOTEN,_PW_STRESS,_PW_FERMI,_PW_HIGHEST_OCCUPIED,_PW_HIGHEST_OCCUPIED_LOWEST_FREE,_PW_KPTS,_PW_BANDS,_PW_BANDSTRUCTURE
-from ase.io.espresso import *
-
-
+from ase.constraints import FixAtoms, FixCartesian, FixScaled
+from ase.io.espresso import create_units,KEYS,_PW_START,_PW_END,_PW_CELL,_PW_POS,_PW_MAGMOM,_PW_FORCE,\
+    _PW_TOTEN,_PW_STRESS,_PW_FERMI,_PW_HIGHEST_OCCUPIED,_PW_HIGHEST_OCCUPIED_LOWEST_FREE,_PW_KPTS,_PW_BANDS,_PW_BANDSTRUCTURE,\
+    iofunction,read_fortran_namelist,get_cell_parameters,get_atomic_species,get_atomic_positions,label_to_symbol,get_valence_electrons,\
+    ibrav_to_cell,Namelist,SinglePointKPoint,cell_to_ibrav,ibrav_to_cell,kspacing_to_grid,kpts2sizeandoffsets,atomic_numbers,\
+    OrderedDict,warnings,kpoint_convert,SinglePointDFTCalculator,kpts2ndarray,parse_position_line,re,os
 
 import copy
 import numpy as np
@@ -179,8 +180,11 @@ class Atoms_custom(Atoms):
                 calculator = atoms.calc
             if info is None:
                 info = copy.deepcopy(atoms.info)
-            if custom_labels is None and atoms.has('custom_labels'):
-                custom_labels = atoms.get_custom_labels()
+            if custom_labels is None:
+                if atoms.has('custom_labels'):
+                    custom_labels = atoms.get_custom_labels()
+                else:
+                    custom_labels = atoms.get_chemical_symbols()
 
         self.arrays = {}
 
@@ -300,7 +304,7 @@ class Atoms_custom(Atoms):
         #add constraints from the second
         othercp = other.copy()
         for constr in othercp.constraints:
-            if isinstance(constr, FixCartesian):  
+            if isinstance(constr, FixCartesian) or isinstance(constr, FixScaled):  
                 constr.a += n1         
                 self.constraints += [constr]
 
@@ -432,7 +436,8 @@ def read_espresso_in_custom(fileobj):
 #This simply passes through the pseudopotentials, leaving the order unchanged, and keeps the labels of the atoms
 def write_espresso_in_custom(fd, atoms, input_data=None, pseudopotentials=None,
                       kspacing=None, kpts=None, koffset=(0, 0, 0),
-                      crystal_coordinates=False, **kwargs):
+                      crystal_coordinates=False, additional_cards=None,
+                      **kwargs):
     """
     Create an input file for pw.x.
 
@@ -591,7 +596,7 @@ def write_espresso_in_custom(fd, atoms, input_data=None, pseudopotentials=None,
                         label=label, 
                         mass=Atom(label_to_symbol(label)).mass,
                         pseudo=pseudo))
-
+         
         for atom, label in zip(atoms, atoms.get_custom_labels()):
 
             # only inclued mask if something is fixed
@@ -697,6 +702,15 @@ def write_espresso_in_custom(fd, atoms, input_data=None, pseudopotentials=None,
                    '{cell[2][0]:.14f} {cell[2][1]:.14f} {cell[2][2]:.14f}\n'
                    ''.format(cell=atoms.cell))
         pwi.append('\n')
+
+
+    if additional_cards:
+        if isinstance(additional_cards, list):
+            additional_cards = "\n".join(additional_cards)
+            additional_cards += "\n\n"
+
+        pwi.append(additional_cards)
+
 
     # Positions - already constructed, but must appear after namelist
     if crystal_coordinates:
@@ -1060,52 +1074,62 @@ def read_espresso_out_custom(fileobj, index=-1, results_required=True):
             ibzkpts = np.array(ibzkpts)
             weights = np.array(weights)
 
+        
         # Bands
         kpts = None
         kpoints_warning = "Number of k-points >= 100: " + \
                           "set verbosity='high' to print the bands."
 
-        for bands_index in indexes[_PW_BANDS] + indexes[_PW_BANDSTRUCTURE]:
-            if image_index < bands_index < next_index:
-                bands_index += 2
-
-                if pwo_lines[bands_index].strip() == kpoints_warning:
-                    continue
-
-                assert ibzkpts is not None
-                spin, bands, eigenvalues = 0, [], [[], []]
-
-                while True:
-                    L = pwo_lines[bands_index].replace('-', ' -').split()
-                    if len(L) == 0:
-                        if len(bands) > 0:
-                            eigenvalues[spin].append(bands)
-                            bands = []
-                    elif L == ['occupation', 'numbers']:
-                        # Skip the lines with the occupation numbers
-                        bands_index += len(eigenvalues[spin][0]) // 8 + 1
-                    elif L[0] == 'k' and L[1].startswith('='):
-                        pass
-                    elif 'SPIN' in L:
-                        if 'DOWN' in L:
-                            spin += 1
-                    else:
-                        try:
-                            bands.extend(map(float, L))
-                        except ValueError:
-                            break
+        try:
+            for bands_index in indexes[_PW_BANDS] + indexes[_PW_BANDSTRUCTURE]:
+                if image_index < bands_index < next_index:
+                    bands_index += 1
+                    # skip over the lines with DFT+U occupation matrices
+                    if 'enter write_ns' in pwo_lines[bands_index]:
+                        while 'exit write_ns' not in pwo_lines[bands_index]:
+                            bands_index += 1
                     bands_index += 1
 
-                if spin == 1:
-                    assert len(eigenvalues[0]) == len(eigenvalues[1])
-                assert len(eigenvalues[0]) == len(ibzkpts), \
-                    (np.shape(eigenvalues), len(ibzkpts))
+                    if pwo_lines[bands_index].strip() == kpoints_warning:
+                        continue
 
-                kpts = []
-                for s in range(spin + 1):
-                    for w, k, e in zip(weights, ibzkpts, eigenvalues[s]):
-                        kpt = SinglePointKPoint(w, s, k, eps_n=e)
-                        kpts.append(kpt)
+                    assert ibzkpts is not None
+                    spin, bands, eigenvalues = 0, [], [[], []]
+
+                    while True:
+                        L = pwo_lines[bands_index].replace('-', ' -').split()
+                        if len(L) == 0:
+                            if len(bands) > 0:
+                                eigenvalues[spin].append(bands)
+                                bands = []
+                        elif L == ['occupation', 'numbers']:
+                            # Skip the lines with the occupation numbers
+                            bands_index += len(eigenvalues[spin][0]) // 8 + 1
+                        elif L[0] == 'k' and L[1].startswith('='):
+                            pass
+                        elif 'SPIN' in L:
+                            if 'DOWN' in L:
+                                spin += 1
+                        else:
+                            try:
+                                bands.extend(map(float, L))
+                            except ValueError:
+                                break
+                        bands_index += 1
+
+                    if spin == 1:
+                        assert len(eigenvalues[0]) == len(eigenvalues[1])
+                    assert len(eigenvalues[0]) == len(ibzkpts), \
+                        (np.shape(eigenvalues), len(ibzkpts))
+
+                    kpts = []
+                    for s in range(spin + 1):
+                        for w, k, e in zip(weights, ibzkpts, eigenvalues[s]):
+                            kpt = SinglePointKPoint(w, s, k, eps_n=e)
+                            kpts.append(kpt)
+        except:
+            print('Warning: bands were not read from pwo file.')
+
 
         # Put everything together
         #
