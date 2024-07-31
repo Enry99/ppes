@@ -25,7 +25,7 @@ sweep_folder = 'distance_sweep'
 relax_folder = 'interface_relax'
 
 
-def write_input(atoms, folder, settings_dict, filename_label=None):
+def write_input(atoms, folder, settings_dict, filename_label=None, relax=False):
     """
     Write input files for different electronic structure calculation programs.
 
@@ -45,6 +45,9 @@ def write_input(atoms, folder, settings_dict, filename_label=None):
     if settings_dict["program"] == 'qe':
         dft_settings_dict = parse_espresso_settings(settings_dict["pwi_head"])
 
+        if relax:
+            dft_settings_dict["calculation"] = 'relax'
+
         calculator = Espresso(label = filename_label if filename_label else 'input',
                             directory=folder,
                             pseudopotentials=dft_settings_dict['pseudopotentials'],
@@ -55,6 +58,8 @@ def write_input(atoms, folder, settings_dict, filename_label=None):
     
 
     elif settings_dict["program"] == 'vasp':
+
+        #TODO: add relax options
         
         if settings_dict.get("poscar_only", False):
             if not os.path.exists(folder):
@@ -237,15 +242,16 @@ def distance(settings_dict, upper, lower):
         #These options are combined (cascade) in this order
 
         # Avoid problem when atoms are wrapped and leak from below the bottom slab
-        com = upper.get_center_of_mass()
-        lower_indices = [atom.index for atom in lower if atom.position[which_coord] < com[which_coord] ]
-        lower = lower[lower_indices]
+        #TODO! Fix this, since as of now leads to a bug if upper slab is below the lower slab in the isolated files
+        #com = upper.get_center_of_mass()
+        #lower_indices = [atom.index for atom in lower if atom.position[which_coord] < com[which_coord] ]
+        #lower = lower[lower_indices]
 
         if "lower_range_fordistance" in settings_dict:
             lower_indices = [i for i in range(len(lower)) if lower.positions[i,which_coord] > settings_dict["lower_range_fordistance"][0]  \
                             and lower.positions[i,which_coord] < settings_dict["lower_range_fordistance"][1]]
             lower = lower[lower_indices]
-        
+
         if "lower_species_fordistance" in settings_dict:
             lower_indices = [atom.index for atom in lower if (atom.symbol in settings_dict["lower_species_fordistance"])]
             lower = lower[lower_indices]
@@ -279,6 +285,13 @@ def generate_isolated(settings_dict, WRITE=True):
         # If both upper and lower already calculated, just return
         if hasattr(upper, "calc") and hasattr(lower, "calc") and upper.calc is not None and lower.calc is not None:
             if upper.calc and lower.calc and upper.calc.results.get("energy", None) is not None and lower.calc.results.get("energy", None) is not None:
+
+                if settings_dict.get('translate_com_to_zero', False):
+                    com = upper.get_center_of_mass()
+                    upper.positions[:] -= com
+                    com = lower.get_center_of_mass()
+                    lower.positions[:] -= com
+                    
                 return upper, lower, np.arange(len(upper)), None
             
     else:
@@ -299,7 +312,14 @@ def generate_isolated(settings_dict, WRITE=True):
 
         upper = atoms[upper_indices]
         lower = atoms[lower_indices]
-    
+
+
+    if settings_dict.get('translate_com_to_zero', False):
+        com = upper.get_center_of_mass()
+        upper.positions[:] -= com
+        com = lower.get_center_of_mass()
+        lower.positions[:] -= com
+
 
     if WRITE:
         write_input(upper, upper_folder, settings_dict, "upper")
@@ -332,6 +352,7 @@ def generate_interface(upper, lower, settings_dict):
         None
     """
 
+
     # Get the distance between the upper and lower atoms
     initial_distance = distance(settings_dict, upper, lower)
 
@@ -339,11 +360,21 @@ def generate_interface(upper, lower, settings_dict):
     transl = settings_dict["reference_distance"] - initial_distance
     upper.positions[:,sweep_coordinate(settings_dict)] += transl
 
+    # Additional translation as fraction of cell vectors
+    if "initial_transl" in settings_dict:
+        initial_transl = settings_dict["initial_transl"]
+        dx = initial_transl[0] * upper.cell.lengths()[0]
+        dy = initial_transl[1] * upper.cell.lengths()[1]
+        dz = initial_transl[2] * upper.cell.lengths()[2]
+        upper.positions[:] += [dx, dy, dz]
+
+    
+
     # Combine the upper and lower atoms
-    atoms = upper + lower
+    atoms = lower + upper   # Set the cell of the lower one
 
     # Write the input files
-    write_input(atoms, sweep_folder, settings_dict)
+    write_input(atoms, relax_folder, settings_dict, "interface_relax", relax=True)
 
     # Launch the job if requested
     if settings_dict.get("launch_interface", False):
@@ -382,6 +413,14 @@ def generate_sweep(upper, lower, upper_indices, atoms, settings_dict):
         initial_distance = settings_dict["reference_distance"]
 
 
+    # Additional translation as fraction of cell vectors
+    if "initial_transl" in settings_dict:
+        initial_transl = settings_dict["initial_transl"]
+        dx = initial_transl[0] * upper.cell.lengths()[0]
+        dy = initial_transl[1] * upper.cell.lengths()[1]
+        dz = initial_transl[2] * upper.cell.lengths()[2]
+        upper.positions[:] += [dx, dy, dz]
+
     # sweep the upper atoms, keeping the lower atoms fixed
         
     z_values = []
@@ -389,7 +428,8 @@ def generate_sweep(upper, lower, upper_indices, atoms, settings_dict):
         if atoms is None:
             new_upper = upper.copy()
             new_upper.positions[:,which_coord] += dz
-            new_atoms = new_upper + lower
+            new_atoms = lower + new_upper # Set the cell of the lower one 
+        
         else:
             new_atoms = atoms.copy()
             new_atoms.positions[upper_indices,which_coord] += dz
@@ -530,8 +570,9 @@ def main():
     elif command == 'rel':
         print("Generating interface file...")
         upper, lower, upper_indices, atoms = generate_isolated(settings_dict)
-        generate_interface(upper, lower, upper_indices, settings_dict)
-        np.savetxt(f'{relax_folder}/upper_indices.txt', upper_indices)
+        
+        generate_interface(upper, lower, settings_dict)
+        np.savetxt(f'{relax_folder}/upper_indices.txt', upper_indices, fmt='%d')
         print("Interface file generated.")
 
     elif command == 'plot':

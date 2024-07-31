@@ -10,6 +10,10 @@
     "filename_lower" : "lower/POSCAR",
     "ppes_from_relaxed" : false,
 
+    "initial_transl" : [0.25, 0, 0],
+
+    "translate_com_to_zero" : false,
+
     "upper_atoms" : [0, 1],             
     "upper_species" : ["C", "H"],       
     "upper_min"     : 10,               
